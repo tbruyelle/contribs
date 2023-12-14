@@ -26,12 +26,14 @@ func Get(ctx context.Context, owner, repo string) ([]string, error) {
 	token := os.Getenv("GH")
 	client := github.NewClient(nil).WithAuthToken(token)
 
-	issues, _, err := client.Issues.ListByRepo(ctx, owner, repo, &github.IssueListByRepoOptions{
-		ListOptions: lp,
-	})
+	stars, _, err := client.Activity.ListStargazers(ctx, owner, repo, &lp)
 	if err != nil {
 		return nil, err
 	}
+	for _, s := range stars {
+		contribs[*s.User.Login] = true
+	}
+
 	forks, _, err := client.Repositories.ListForks(ctx, owner, repo, &github.RepositoryListForksOptions{
 		ListOptions: lp,
 	})
@@ -41,15 +43,17 @@ func Get(ctx context.Context, owner, repo string) ([]string, error) {
 	for _, f := range forks {
 		contribs[*f.Owner.Login] = true
 	}
-	stars, _, err := client.Activity.ListStargazers(ctx, owner, repo, &lp)
+
+	issues, _, err := client.Issues.ListByRepo(ctx, owner, repo, &github.IssueListByRepoOptions{
+		ListOptions: lp,
+	})
 	if err != nil {
 		return nil, err
 	}
-	for _, s := range stars {
-		contribs[*s.User.Login] = true
-	}
+
 	for _, i := range issues {
 		contribs[*i.User.Login] = true
+
 		//	reacts, _, err := client.Reactions.ListIssueReactions(ctx, owner, repo, *i.Number, &lp)
 		//	if err != nil {
 		//		return nil, err
@@ -57,6 +61,7 @@ func Get(ctx context.Context, owner, repo string) ([]string, error) {
 		//	for _, r := range reacts {
 		//		contribs[*r.User.Name] = true
 		//	}
+
 		// fetch comments
 		comments, _, err := client.Issues.ListComments(ctx, owner, repo, *i.Number, &github.IssueListCommentsOptions{
 			ListOptions: github.ListOptions{PerPage: 1000},
@@ -77,6 +82,14 @@ func Get(ctx context.Context, owner, repo string) ([]string, error) {
 			//			contribs[*r.User.Name] = true
 			//		}
 		}
+
+		events, _, err := client.Issues.ListIssueEvents(ctx, owner, repo, *i.Number, &lp)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range events {
+			contribs[*e.Actor.Login] = true
+		}
 	}
 	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
 		ListOptions: github.ListOptions{PerPage: 1000},
@@ -95,6 +108,21 @@ func Get(ctx context.Context, owner, repo string) ([]string, error) {
 		}
 		for _, c := range comments {
 			contribs[*c.User.Login] = true
+		}
+
+		reviews, _, err := client.PullRequests.ListReviews(ctx, owner, repo, *pr.Number, &lp)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range reviews {
+			contribs[*r.User.Login] = true
+			comments, _, err := client.PullRequests.ListReviewComments(ctx, owner, repo, *pr.Number, *r.ID, &lp)
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range comments {
+				contribs[*c.User.Login] = true
+			}
 		}
 	}
 	var ret []string
