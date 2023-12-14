@@ -4,5 +4,5 @@ List all handles from stars, forks, issues, comments and pull requests from a gi
 
 ```sh
 Usage:
-$ GH=ACCESS_TOKEN go run github.com/tbruyelle/contribs@latest OWNER REPO
+GH=ACCESS_TOKEN go run github.com/tbruyelle/contribs@latest OWNER REPO
 ```
